@@ -189,7 +189,7 @@ def snap_delete_types(snap, delete_types):
     return new_snap
 
 
-def create_rigid_snapshot(mb_compound):
+def create_rigid_snapshot(mb_compound, num_rigid_per_mol=1):
     """Preps a hoomd snapshot to store rigid body information
 
     This method relies on using built-in mBuild methods to
@@ -200,6 +200,8 @@ def create_rigid_snapshot(mb_compound):
     mb_compound : mbuild.Compound, required
         mBuild compound containing the rigid body information
         of the complete system
+    num_rigid_per_mol : int, default=1
+        The number of rigid particles per molecule
 
     Returns
     -------
@@ -213,9 +215,9 @@ def create_rigid_snapshot(mb_compound):
     import hoomd
 
     rigid_ids = [p.rigid_id for p in mb_compound.particles()]
-    rigid_bodies = set(rigid_ids)
-    # Total number of rigid particles
-    N_mols = len(rigid_bodies)
+    rigid_bodies = set(rigid_ids)    # Total number of rigid particles
+    N_mols = len(rigid_bodies) * num_rigid_per_mol
+
     init_snap = hoomd.Snapshot()
     # Create place holder spots in the snapshot for rigid centers
     init_snap.particles.types = ["R"]
@@ -223,7 +225,9 @@ def create_rigid_snapshot(mb_compound):
     return init_snap
 
 
-def update_rigid_snapshot(snapshot, mb_compound):
+def update_rigid_snapshot(
+        snapshot, mb_compound, num_rigid_per_mol=1, ellipsoid=False
+):
     """Update a snapshot prepared for rigid bodies with system informaiton
 
     Parameters
@@ -234,16 +238,27 @@ def update_rigid_snapshot(snapshot, mb_compound):
     mb_compound : mbuild.Compound, required
         mBuild compound containing the rigid body information
         of the complete system
+    num_rigid_per_mol : int, default=1
+        The number of rigid particles per molecule
+    ellipsoid : bool, default=False
+        If True, models the rigid bodies as if they are ellipsoids
 
     """
     rigid_ids = [p.rigid_id for p in mb_compound.particles()]
     rigid_bodies = set(rigid_ids)
     # Total number of rigid body particles
-    N_mols = len(rigid_bodies)
+    N_mols = len(rigid_bodies) * num_rigid_per_mol
     N_p =  [rigid_ids.count(i) for i in rigid_bodies]
 	# Right now, we're assuming each molecule has the same num of particles
     assert len(set(N_p)) == 1
     N_p = N_p[0] # Number of particles per molecule
+
+    # Here, we only have 1 non-rigid particle per ellipsoid
+    # The mol indices for each rigid body would be:
+    # [num_rigid_particles + 1 : num_total_ellipsoids] --> num_rigid_particles/2
+    # Example for 3 ellipsoid chain:
+        # Rigid IDs are [0,1,2,3,4,5]
+        # Mol indices are [6, 7, 8]
     mol_inds = [
         np.arange(N_mols + i * N_p, N_mols + i * N_p + N_p)
         for i in range(N_mols)
@@ -251,6 +266,9 @@ def update_rigid_snapshot(snapshot, mb_compound):
 
     for i, inds in enumerate(mol_inds):
 	    total_mass = np.sum(snapshot.particles.mass[inds])
+        # Would just be the position of the ith indices
+        # The center-of-mass part will be taken care of in mBuild
+        com = snapshot.particles.position[inds]
 	    com = (
 		    np.sum(
 			    snapshot.particles.position[inds]
@@ -259,8 +277,11 @@ def update_rigid_snapshot(snapshot, mb_compound):
 		    )
 		    / total_mass
 	    )
+        # Can probably skip this step, since the rigid particles will already be added
 	    snapshot.particles.position[i] = com
+        # Not sure about this, what is .body? The rigid ID?
 	    snapshot.particles.body[i] = i
+        # Set the corresponding rigid ID for the center particles
 	    snapshot.particles.body[inds] = i * np.ones_like(inds)
 	    snapshot.particles.mass[i] = np.sum(snapshot.particles.mass[inds])
 	    snapshot.particles.moment_inertia[i] = moit(
