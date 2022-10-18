@@ -3,6 +3,7 @@ import warnings
 import freud
 import gsd
 import gsd.hoomd
+import MDAnalysis as mda
 import numpy as np
 from rowan import vector_vector_rotation
 
@@ -11,6 +12,27 @@ from cmeutils.geometry import (
         get_plane_normal, angle_between_vectors, dihedral_angle
 )
 from cmeutils.plotting import get_histogram
+
+
+def persistence_length(gsd_file, start, stop, select_atoms_arg, window_size):
+    """Performs time-average sampling of persistence length"""
+    from MDAnalysis.analysis import polymer
+
+    lp_results = []
+    sampling_windows = np.arange(start, stop + 1, window_size)
+    for idx, frame in enumerate(sampling_windows):
+        try:
+            u = mda.Universe(gsd_file)
+            chains = u.atoms.fragments
+            backbones = [chain.select_atoms(select_atoms_arg) for chain in chains]
+            sorted_backbones = [polymer.sort_backbone(bb) for bb in backbones]
+            _pl = polymer.PersistenceLength(sorted_backbones)
+            pl = _pl.run(start=frame, stop=sampling_windows[idx+1] - 1)
+            lp_results.append(pl.results.lp)
+        except IndexError:
+            pass
+    lp_std = np.std(lp_results)
+    return np.mean(lp_results), lp_std
 
 
 def angle_distribution(
