@@ -35,7 +35,7 @@ def equil_sample(
                 data[prod_start:], g=ineff, conservative=conservative
             )
         uncorr_sample = data[prod_start:][uncorr_indices]
-        return(uncorr_sample, uncorr_indices, prod_start, Neff)
+        return(uncorr_sample, uncorr_indices, prod_start, ineff, Neff)
 
     else:
         raise ValueError(
