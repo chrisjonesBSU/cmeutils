@@ -249,6 +249,8 @@ def dihedral_distribution(
         stop=-1,
         degrees=False,
         histogram=False,
+        phi_min=-np.pi,
+        phi_max=np.pi,
         normalize=False,
         bins="auto"
 ):
@@ -330,7 +332,7 @@ def dihedral_distribution(
                 data=np.array(dihedrals),
                 normalize=normalize,
                 bins=bins,
-                x_range=(-np.pi, np.pi)
+                x_range=(phi_min, phi_max)
         )
         return np.stack((bin_centers, bin_heights)).T
     else:
