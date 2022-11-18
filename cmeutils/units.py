@@ -11,9 +11,6 @@ def base_units():
     units["ang_to_m"] = 1e-10
     units["m_to_nm"] = 1e9 
     units["m_to_ang"] = 1e10
-    units["mass_units"] = "amu"
-    units["energy_units"] = "kcal/mol"
-    units["distance_units"] = "angstroms"
     return units
 
 def reduce_from_kelvin(T_SI, ref_energy, precision=2):
