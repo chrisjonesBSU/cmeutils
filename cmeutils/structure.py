@@ -15,12 +15,15 @@ from cmeutils.plotting import get_histogram
 
 
 def radius_of_gyration(gsd_file, start, stop):
+    print("GSD File is:")
+    print(gsd_file)
+    print("------------")
     trajectory = gsd.hoomd.open(gsd_file, mode="rb")
     rg_values = []
     rg_means = []
     rg_std = []
     for snap in trajectory[start: stop]:
-        clusters, cl_props = gsd_utils.get_molecule_cluster(snap)
+        clusters, cl_props = gsd_utils.get_molecule_cluster(snap=snap)
         rg_values.extend(cl_props.radii_of_gyration)
         rg_means.append(np.mean(cl_props.radii_of_gyration))
         rg_std.append(np.std(cl_props.radii_of_gyration))
@@ -66,14 +69,14 @@ def angle_distribution(
         normalize=False,
         bins="auto"
 ):
-    """Returns the bond angle distribution for a given triplet of particles 
-    
+    """Returns the bond angle distribution for a given triplet of particles
+
     Parameters
     ----------
     gsdfile : str
         Filename of the GSD trajectory.
     A_name, B_name, C_name : str
-        Name(s) of particles that form the angle triplet 
+        Name(s) of particles that form the angle triplet
         (found in gsd.hoomd.Snapshot.particles.types)
         They must be given in the same order as they form the angle
     start : int
@@ -86,21 +89,21 @@ def angle_distribution(
         if False, the angle values are returned in radians.
     histogram : bool, default=False
         If set to True, places the resulting angles into a histogram
-        and retrums the histogram's bin centers and heights as 
+        and retrums the histogram's bin centers and heights as
         opposed to the actual calcualted angles.
     theta_min : float, default = 0.0
         Sets the minimum theta value to be included in the distribution
-    theta_max : float, default = None 
+    theta_max : float, default = None
         Sets the maximum theta value to be included in the distribution
         If left as None, then theta_max will be either pi radians or
         180 degrees depending on the value set for the degrees parameter
     normalize : bool, default=False
         If set to True, normalizes the angle distribution by the
-        sum of the bin heights, so that the distribution adds up to 1. 
+        sum of the bin heights, so that the distribution adds up to 1.
     bins : float, int, or str,  default="auto"
         The number of bins to use when finding the distribution
         of bond angles. Using "auto" will set the number of
-        bins based on the ideal bin size for the data. 
+        bins based on the ideal bin size for the data.
         See the numpy.histogram docs for more details.
 
     Returns
@@ -177,8 +180,8 @@ def bond_distribution(
     normalize=True,
     bins=100
 ):
-    """Returns the bond length distribution for a given bond pair 
-    
+    """Returns the bond length distribution for a given bond pair
+
     Parameters
     ----------
     gsdfile : str
@@ -193,19 +196,19 @@ def bond_distribution(
         Final frame index for accumulating bond lengths. (default -1)
     histogram : bool, default=False
         If set to True, places the resulting bonds into a histogram
-        and retrums the histogram's bin centers and heights as 
+        and retrums the histogram's bin centers and heights as
         opposed to the actual calcualted bonds.
     l_min : float, default = 0.0
         Sets the minimum bond length to be included in the distribution
-    l_max : float, default = 5.0 
+    l_max : float, default = 5.0
         Sets the maximum bond length value to be included in the distribution
     normalize : bool, default=False
         If set to True, normalizes the angle distribution by the
-        sum of the bin heights, so that the distribution adds up to 1. 
+        sum of the bin heights, so that the distribution adds up to 1.
     bins : float, int, or str,  default="auto"
         The number of bins to use when finding the distribution
         of bond angles. Using "auto" will set the number of
-        bins based on the ideal bin size for the data. 
+        bins based on the ideal bin size for the data.
         See the numpy.histogram docs for more details.
 
     Returns
@@ -271,16 +274,16 @@ def dihedral_distribution(
         normalize=False,
         bins="auto"
 ):
-    """Returns the bond angle distribution for a given triplet of particles 
-    
+    """Returns the bond angle distribution for a given triplet of particles
+
     Parameters
     ----------
     gsdfile : str
         Filename of the GSD trajectory.
     A_name, B_name, C_name, D_name: str
-        Name(s) of particles that form the dihedral quadruplett 
+        Name(s) of particles that form the dihedral quadruplett
         (found in gsd.hoomd.Snapshot.particles.types)
-        They must be given in the same order as they form the dihedral 
+        They must be given in the same order as they form the dihedral
     start : int
         Starting frame index for accumulating bond lengths.
         Negative numbers index from the end. (default 0)
@@ -291,15 +294,15 @@ def dihedral_distribution(
         if False, the angle values are returned in radians.
     histogram : bool, default=False
         If set to True, places the resulting angles into a histogram
-        and retrums the histogram's bin centers and heights as 
+        and retrums the histogram's bin centers and heights as
         opposed to the actual calcualted angles.
     normalize : bool, default=False
         If set to True, normalizes the dihedral distribution by the
-        sum of the bin heights, so that the distribution adds up to 1. 
+        sum of the bin heights, so that the distribution adds up to 1.
     bins : float, int, or str,  default="auto"
         The number of bins to use when finding the distribution
         of bond angles. Using "auto" will set the number of
-        bins based on the ideal bin size for the data. 
+        bins based on the ideal bin size for the data.
         See the numpy.histogram docs for more details.
 
     Returns
