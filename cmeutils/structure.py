@@ -14,6 +14,23 @@ from cmeutils.geometry import (
 from cmeutils.plotting import get_histogram
 
 
+def radius_of_gyration(gsd_file, start, stop):
+    trajectory = gsd.hoomd.open(gsd_file, mode="rb")
+    rg_values = []
+    rg_means = []
+    rg_std = []
+    for snap in trajectory[start: stop]:
+        clusters, cl_props = gsd_utils.get_molecule_cluster(snap)
+        rg_values.extend(cl_props.radii_of_gyration)
+        rg_means.append(np.mean(cl_props.radii_of_gyration))
+        rg_std.append(np.std(cl_props.radii_of_gyration))
+    return rg_means, rg_std, rg_values
+
+
+def end_to_end_distance(gsd_file, start, stop):
+    pass
+
+
 def persistence_length(gsd_file, start, stop, select_atoms_arg, window_size):
     """Performs time-average sampling of persistence length"""
     from MDAnalysis.analysis import polymer

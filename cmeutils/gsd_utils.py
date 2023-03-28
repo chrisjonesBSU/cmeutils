@@ -117,7 +117,9 @@ def get_molecule_cluster(gsd_file=None, snap=None, gsd_frame=-1):
     )
     cluster = freud.cluster.Cluster()
     cluster.compute(system=system, neighbors=nlist)
-    return cluster.cluster_idx
+    cl_props = freud.cluster.ClusterProperties()
+    cl_props.compute(system, cluster.cluster_idx)
+    return cluster, cl_props
 
 
 def _validate_inputs(gsd_file, snap, gsd_frame):
