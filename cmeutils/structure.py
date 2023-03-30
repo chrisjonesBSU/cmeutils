@@ -29,9 +29,36 @@ def radius_of_gyration(gsd_file, start, stop):
         rg_std.append(np.std(cl_props.radii_of_gyration))
     return rg_means, rg_std, rg_values
 
+def end_to_end(gsd_file, head_index, tail_index, start, stop):
+    re_array = [] # distances
+    re_means = [] # mean re distance
+    re_stds = [] # std of re distances
+    vectors = [] # end-to-end vectors (list of lists)
+    with gsd.hoomd.open(gsd_file) as traj:
+        for snap in traj[start:stop]:
+            snap_res = [] # snap vectors
+            cl, cl_prop = get_molecule_cluster(snap=snap)
+            for i in cl.cluster_keys:
+                head = snap.particles.position[i[head_index]]
+                tail = snap.particles.position[i[tail_index]]
+                vec = tail - head
+                snap_res.append(vec)
+            re_array.extend(np.linalg.norm(snap_res, axis=0))
+            re_means.append(np.mean(np.linalg.norm(snap_res)))
+            re_stds.append(np.std(np.linalg.norm(snap_res)))
+            vectors.append(snap_res)
+    return (re_array, re_means, re_stds, vectors)
 
-def end_to_end_distance(gsd_file, start, stop):
-    pass
+
+def nematic_order_param(vectors, director):
+    """
+    vectors: list of vectors
+    """
+    vectors = np.asarray(vectors)
+    orientations = rowan.normalize(np.append(np.zeros((vectors.shape[0], 1)), vectors, axis=1))
+    nematic = freud.order.Nematic(np.asarray(director))
+    nematic.compute(orientations)
+    return nematic
 
 
 def persistence_length(gsd_file, start, stop, select_atoms_arg, window_size):
