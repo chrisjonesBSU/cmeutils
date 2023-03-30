@@ -5,6 +5,7 @@ import gsd
 import gsd.hoomd
 import MDAnalysis as mda
 import numpy as np
+import rowan
 from rowan import vector_vector_rotation
 
 from cmeutils import gsd_utils
