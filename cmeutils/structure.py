@@ -5,9 +5,11 @@ import gsd
 import gsd.hoomd
 import MDAnalysis as mda
 import numpy as np
+import rowan
 from rowan import vector_vector_rotation
 
 from cmeutils import gsd_utils
+from cmeutils.gsd_utils import get_molecule_cluster
 from cmeutils.geometry import (
         get_plane_normal, angle_between_vectors, dihedral_angle
 )
