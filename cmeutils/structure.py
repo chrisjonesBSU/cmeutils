@@ -31,6 +31,7 @@ def radius_of_gyration(gsd_file, start, stop):
         rg_std.append(np.std(cl_props.radii_of_gyration))
     return rg_means, rg_std, rg_values
 
+
 def end_to_end(gsd_file, head_index, tail_index, start, stop):
     re_array = [] # distances
     re_means = [] # mean re distance
@@ -494,7 +495,8 @@ def gsd_rdf(
         type_B = snap.particles.typeid == snap.particles.types.index(B_name)
 
         if exclude_bonded:
-            molecules = gsd_utils.get_molecule_cluster(snap=snap)
+            clusters, cl_props = gsd_utils.get_molecule_cluster(snap=snap)
+            molecules = clusters.cluster_idx
             molecules_A = molecules[type_A]
             molecules_B = molecules[type_B]
 
