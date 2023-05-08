@@ -40,15 +40,17 @@ def end_to_end(gsd_file, head_index, tail_index, start, stop):
     with gsd.hoomd.open(gsd_file) as traj:
         for snap in traj[start:stop]:
             snap_res = [] # snap vectors
+            snap_distances = []
             cl, cl_prop = get_molecule_cluster(snap=snap)
             for i in cl.cluster_keys:
                 head = snap.particles.position[i[head_index]]
                 tail = snap.particles.position[i[tail_index]]
                 vec = tail - head
                 snap_res.append(vec)
-            re_array.extend(np.linalg.norm(snap_res, axis=0))
-            re_means.append(np.mean(np.linalg.norm(snap_res)))
-            re_stds.append(np.std(np.linalg.norm(snap_res)))
+                snap_distances.append(np.linalg.norm(vec))
+            re_array.extend(snap_distances)
+            re_means.append(np.mean(snap_distances))
+            re_stds.append(np.std(snap_distances))
             vectors.append(snap_res)
     return (re_array, re_means, re_stds, vectors)
 
