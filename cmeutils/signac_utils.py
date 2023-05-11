@@ -11,7 +11,7 @@ def sample_job(
         conservative=True
 ):
     log_file = np.genfromtxt(job.fn(filename), names=True)
-    col_name = _parse_hoomd_log_names(variable, log_files.dtype.names)
+    col_name = _parse_hoomd_log_names(variable, log_file.dtype.names)
     data = log_file[col_name]
 
     uncorr_sample, uncorr_indices, prod_start, ineff, Neff = equil_sample(
@@ -23,21 +23,21 @@ def sample_job(
 
     try:
         job.doc.samples
-    except KeyError:
+    except AttributeError:
         job.doc.samples = {}
 
-    varaible_dict = {
+    variable_dict = {
             "start": uncorr_indices.start + prod_start,
             "stop": uncorr_indices.stop + prod_start,
             "step": uncorr_indices.step,
-            "N_samples": Neff
+            "N_samples": np.round(Neff, 0)
     }
     job.doc.samples[variable] = variable_dict
 
 
-def get_sample(job, variable):
+def get_sample(job, filename, variable):
     log_file = np.genfromtxt(job.fn(filename), names=True)
-    col_name = _parse_hoomd_log_names(variable, log_files.dtype.names)
+    col_name = _parse_hoomd_log_names(variable, log_file.dtype.names)
     data = log_file[col_name]
 
     indices = range(
@@ -54,10 +54,9 @@ def check_equilibration(
         variable,
         threshold_fraction,
         threshold_neff,
-        strict
 ):
     log_file = np.genfromtxt(job.fn(filename), names=True)
-    col_name = _parse_hoomd_log_names(variable, log_files.dtype.names)
+    col_name = _parse_hoomd_log_names(variable, log_file.dtype.names)
     data = log_file[col_name]
 
     equilibrated, t0, g, Neff = is_equilibrated(
@@ -68,7 +67,7 @@ def check_equilibration(
     return equilibrated
 
 
-def _prase_hoomd_log_names(variable, names):
+def _parse_hoomd_log_names(variable, names):
     name_match = [i for i in names if variable in i]
     if len(name_match) == 0:
         raise ValueError(
@@ -78,7 +77,7 @@ def _prase_hoomd_log_names(variable, names):
         )
     if len(name_match) > 1:
         raise ValueError(
-                f"The variable {variable} returned multiple column headers "
-                f"from {filename}."
+                f"The variable {variable} returned multiple column headers:"
+                f"{name_match}."
         )
     return name_match[0]
