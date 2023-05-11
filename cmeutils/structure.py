@@ -3,7 +3,6 @@ import warnings
 import freud
 import gsd
 import gsd.hoomd
-import MDAnalysis as mda
 import numpy as np
 import rowan
 from rowan import vector_vector_rotation
@@ -14,77 +13,6 @@ from cmeutils.geometry import (
         get_plane_normal, angle_between_vectors, dihedral_angle
 )
 from cmeutils.plotting import get_histogram
-
-
-def radius_of_gyration(gsd_file, start, stop):
-    print("GSD File is:")
-    print(gsd_file)
-    print("------------")
-    trajectory = gsd.hoomd.open(gsd_file, mode="rb")
-    rg_values = []
-    rg_means = []
-    rg_std = []
-    for snap in trajectory[start: stop]:
-        clusters, cl_props = gsd_utils.get_molecule_cluster(snap=snap)
-        rg_values.extend(cl_props.radii_of_gyration)
-        rg_means.append(np.mean(cl_props.radii_of_gyration))
-        rg_std.append(np.std(cl_props.radii_of_gyration))
-    return rg_means, rg_std, rg_values
-
-
-def end_to_end(gsd_file, head_index, tail_index, start, stop):
-    re_array = [] # distances
-    re_means = [] # mean re distance
-    re_stds = [] # std of re distances
-    vectors = [] # end-to-end vectors (list of lists)
-    with gsd.hoomd.open(gsd_file) as traj:
-        for snap in traj[start:stop]:
-            snap_res = [] # snap vectors
-            snap_distances = []
-            cl, cl_prop = get_molecule_cluster(snap=snap)
-            for i in cl.cluster_keys:
-                head = snap.particles.position[i[head_index]]
-                tail = snap.particles.position[i[tail_index]]
-                vec = tail - head
-                snap_res.append(vec)
-                snap_distances.append(np.linalg.norm(vec))
-            re_array.extend(snap_distances)
-            re_means.append(np.mean(snap_distances))
-            re_stds.append(np.std(snap_distances))
-            vectors.append(snap_res)
-    return (re_array, re_means, re_stds, vectors)
-
-
-def nematic_order_param(vectors, director):
-    """
-    vectors: list of vectors
-    """
-    vectors = np.asarray(vectors)
-    orientations = rowan.normalize(np.append(np.zeros((vectors.shape[0], 1)), vectors, axis=1))
-    nematic = freud.order.Nematic(np.asarray(director))
-    nematic.compute(orientations)
-    return nematic
-
-
-def persistence_length(gsd_file, start, stop, select_atoms_arg, window_size):
-    """Performs time-average sampling of persistence length"""
-    from MDAnalysis.analysis import polymer
-
-    lp_results = []
-    sampling_windows = np.arange(start, stop + 1, window_size)
-    for idx, frame in enumerate(sampling_windows):
-        try:
-            u = mda.Universe(gsd_file)
-            chains = u.atoms.fragments
-            backbones = [chain.select_atoms(select_atoms_arg) for chain in chains]
-            sorted_backbones = [polymer.sort_backbone(bb) for bb in backbones]
-            _pl = polymer.PersistenceLength(sorted_backbones)
-            pl = _pl.run(start=frame, stop=sampling_windows[idx+1] - 1)
-            lp_results.append(pl.results.lp)
-        except IndexError:
-            pass
-    lp_std = np.std(lp_results)
-    return np.mean(lp_results), lp_std
 
 
 def angle_distribution(
@@ -665,13 +593,9 @@ def order_parameter(aa_gsd, cg_gsd, mapping, r_max, a_max, large=6, start=-10):
     return order, cl_idx
 
 
-def all_atom_rdf(gsdfile,
-                 start=0,
-                 stop=-1,
-                 r_max=None,
-                 r_min=0,
-                 bins=100,
-                 ):
+def all_atom_rdf(
+        gsdfile, start=0, stop=-1, r_max=None, r_min=0, bins=100,
+):
     """Compute intermolecular RDF from a GSD file.
 
     This function calculates the radial distribution function given a GSD file

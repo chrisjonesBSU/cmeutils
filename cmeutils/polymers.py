@@ -4,6 +4,7 @@ import freud
 import gsd
 import gsd.hoomd
 import MDAnalysis as mda
+from MDAnalysis.analysis import polymer
 import numpy as np
 import rowan
 from rowan import vector_vector_rotation
@@ -63,8 +64,6 @@ def nematic_order_param(vectors, director):
 
 def persistence_length(gsd_file, start, stop, select_atoms_arg, window_size):
     """Performs time-average sampling of persistence length"""
-    from MDAnalysis.analysis import polymer
-
     lp_results = []
     sampling_windows = np.arange(start, stop + 1, window_size)
     for idx, frame in enumerate(sampling_windows):
