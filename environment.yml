@@ -4,12 +4,14 @@ channels:
 dependencies:
   - freud
   - gsd
+  - hoomd>3.0=*cpu*
+  - mbuild
   - numpy
   - pip
   - python
   - matplotlib
   - mdanalysis
-  - pymbar < 4.0
+  - pymbar >= 4.0
   - pytest
   - pytest-cov
   - rowan
