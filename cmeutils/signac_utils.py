@@ -6,8 +6,8 @@ def sample_job(
         job,
         filename,
         variable,
-        threshold_fraction,
-        threshold_neff,
+        threshold_fraction=0,
+        threshold_neff=1,
         conservative=True
 ):
     log_file = np.genfromtxt(job.fn(filename), names=True)
