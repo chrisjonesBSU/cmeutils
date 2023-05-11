@@ -79,6 +79,9 @@ def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
     -------
     list : [True, t0, g, Neff]
         If the data set is considered properly equilibrated
+        t0: Index of the beginning of the equilibrated region
+        g: Statistical inefficienty of equilibrated data 
+        Neff: The number of uncorrelated samples
     list : [False, None, None, None]
         If the data set is not considered properly equilibrated
 
@@ -94,7 +97,7 @@ def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
             f"Passed 'threshold_neff' value: {threshold_neff}, expected value "
             "1 or greater."
         )
-    [t0, g, Neff] = timeseries.detect_equilibration(data, nskip=nskip)
+    t0, g, Neff = timeseries.detect_equilibration(data, nskip=nskip)
     frac_equilibrated = 1.0 - (t0 / np.shape(data)[0])
 
     if (frac_equilibrated >= threshold_fraction) and (Neff >= threshold_neff):
