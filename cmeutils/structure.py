@@ -636,3 +636,21 @@ def all_atom_rdf(
         for snap in trajectory[start:stop]:
             rdf.compute(snap, reset=False)
     return rdf
+
+
+def bragg_angle_to_length(angles, wave_length):
+    """"""
+    angles_rad = (np.asarray(angles) * np.pi) / 180
+    d = (wave_length) / (2*np.sin(angles_rad))
+    return d
+
+
+def k_vector_to_length(k, ref_distance=1):
+    """"""
+    d = (2*np.pi*ref_distance) / k
+    return d
+
+
+def length_to_k_vector(lengths):
+    """"""
+    return (2*np.pi)/np.asarray(lengths)
