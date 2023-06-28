@@ -35,13 +35,18 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start, stop):
     re_means = [] # mean re distance
     re_stds = [] # std of re distances
     vectors = [] # end-to-end vectors (list of lists)
+    #TODO: PBC conditions. 
     with gsd.hoomd.open(gsd_file) as traj:
         for snap in traj[start:stop]:
+            unwrap_adj = snap.particles.image * snap.system.box[:3]
+            unwrap_pos = snap.particles.position + unwrap_adj 
             snap_res = [] # snap vectors
             cl, cl_prop = get_molecule_cluster(snap=snap)
             for i in cl.cluster_keys:
-                head = snap.particles.position[i[head_index]]
-                tail = snap.particles.position[i[tail_index]]
+                #head = snap.particles.position[i[head_index]]
+                head = unwrap_pos[i[head_index]]
+                tail = unwrap_pos[i[tail_index]]
+                #tail = snap.particles.position[i[tail_index]]
                 vec = tail - head
                 snap_res.append(vec)
             re_array.extend(np.linalg.norm(snap_res, axis=0))
