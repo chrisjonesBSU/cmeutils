@@ -27,7 +27,7 @@ def radius_of_gyration(gsd_file, start=0, stop=-1):
     start: int; optional; default 0
         The frame index of the trajectory to begin with
     stop: int; optional; default -1
-        The frame index of the trajectory to end with 
+        The frame index of the trajectory to end with
 
     Returns
     -------
@@ -64,7 +64,7 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
     start: int; optional; default 0
         The frame index of the trajectory to begin with
     stop: int; optional; default -1
-        The frame index of the trajectory to end with 
+        The frame index of the trajectory to end with
 
     Returns
     -------
@@ -81,11 +81,11 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
     re_means = [] # mean re distance
     re_stds = [] # std of re distances
     vectors = [] # end-to-end vectors (list of lists)
-    #TODO: PBC conditions. 
+    #TODO: PBC conditions.
     with gsd.hoomd.open(gsd_file) as traj:
         for snap in traj[start:stop]:
-            unwrap_adj = snap.particles.image * snap.system.box[:3]
-            unwrap_pos = snap.particles.position + unwrap_adj 
+            unwrap_adj = snap.particles.image * snap.configuration.box[:3]
+            unwrap_pos = snap.particles.position + unwrap_adj
             snap_res = [] # snap vectors
             cl, cl_prop = get_molecule_cluster(snap=snap)
             for i in cl.cluster_keys:
@@ -125,7 +125,7 @@ def nematic_order_param(vectors, director):
 
 def persistence_length(gsd_file, select_atoms_arg, window_size, start=0, stop=1):
     """Performs time-average sampling of persistence length using MDAnalysis
-    
+
     See:
     https://docs.mdanalysis.org/stable/documentation_pages/analysis/polymer.html
 
@@ -136,11 +136,11 @@ def persistence_length(gsd_file, select_atoms_arg, window_size, start=0, stop=1)
     slect_atoms_arg : str; required
         Valid argument to MDAnalysis.universe.select_atoms
     window_size : int; required
-        The number of frames to use in 
+        The number of frames to use in
     start: int; optional; default 0
         The frame index of the trajectory to begin with
     stop: int; optional; default -1
-        The frame index of the trajectory to end with 
+        The frame index of the trajectory to end with
     """
     lp_results = []
     sampling_windows = np.arange(start, stop + 1, window_size)
