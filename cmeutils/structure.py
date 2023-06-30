@@ -464,41 +464,25 @@ def gsd_rdf(
         return rdf, normalization
 
 
-def get_centers(gsdfile, new_gsdfile):
-    """Create a gsd file containing the molecule centers from an existing gsd file.
-
-
-    This function calculates the centers of a trajectory given a GSD file
-    and stores them into a new GSD file just for centers. By default it will calculate the centers of an entire trajectory.
+def nematic_order_parameter(vectors, director):
+    """Finds the nematic (S2) order parameter for a list of vectors
 
     Parameters
     ----------
-    gsdfile : str
-        Filename of the GSD trajectory.
-    new_gsdfile : str
-        Filename of new GSD for centers.
+    vectors : sequence of vectors; required
+        The list of vectors to use in the nematic order parameter calculation
+    director : numpy.ndarray, shape=(1,3)
+        The nematic director of the reference state
+
+    Returns
+    -------
+    freud.order.Nematic
     """
-    with gsd.hoomd.open(new_gsdfile, 'wb') as new_traj, gsd.hoomd.open(gsdfile, 'rb') as traj:
-        snap = traj[0]
-        cluster_idx = gsd_utils.get_molecule_cluster(snap=snap)
-        for snap in traj:
-            new_snap = gsd.hoomd.Snapshot()
-            new_snap.configuration.box = snap.configuration.box
-            f_box = freud.box.Box.from_box(snap.configuration.box)
-            # Use the freud box to unwrap the particle positions
-            unwrapped_positions = f_box.unwrap(snap.particles.position, snap.particles.image)
-            uw_centers = []
-            for i in range(max(cluster_idx)+1):
-                cluster_uw_pos = unwrapped_positions[np.where(cluster_idx == i)]
-                uw_centers.append(np.mean(cluster_uw_pos, axis = 0))
-            uw_centers = np.stack(uw_centers)
-            new_snap.particles.position = f_box.wrap(uw_centers)
-            new_snap.particles.N = len(uw_centers)
-            new_snap.particles.types = ["A"]
-            new_snap.particles.image = f_box.get_images(uw_centers)
-            new_snap.particles.typeid = np.zeros(len(uw_centers))
-            new_snap.validate()
-            new_traj.append(new_snap)
+    vectors = np.asarray(vectors)
+    orientations = rowan.normalize(np.append(np.zeros((vectors.shape[0], 1)), vectors, axis=1))
+    nematic = freud.order.Nematic(np.asarray(director))
+    nematic.compute(orientations)
+    return nematic
 
 
 def order_parameter(aa_gsd, cg_gsd, mapping, r_max, a_max, large=6, start=-10):
@@ -654,3 +638,4 @@ def k_vector_to_length(k, ref_distance=1):
 def length_to_k_vector(lengths):
     """"""
     return (2*np.pi)/np.asarray(lengths)
+

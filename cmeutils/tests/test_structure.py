@@ -16,7 +16,6 @@ from cmeutils.structure import (
         get_quaternions, 
         order_parameter,
         all_atom_rdf,
-        get_centers
     )
 
 class TestStructure(BaseTest):
@@ -232,8 +231,3 @@ class TestStructure(BaseTest):
     def test_all_atom_rdf(self, gsdfile):
         rdf = all_atom_rdf(gsdfile)
         assert isinstance(rdf, freud.density.RDF)
-        
-    def test_get_centers(self, gsdfile):
-        new_gsdfile = "centers.gsd"
-        centers = get_centers(gsdfile, new_gsdfile) 
-        assert isinstance(centers, type(None))

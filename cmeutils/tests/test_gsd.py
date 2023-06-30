@@ -10,6 +10,7 @@ from base_test import BaseTest
 from cmeutils.gsd_utils import (
     create_rigid_snapshot,
     ellipsoid_gsd,
+    get_centers,
     get_molecule_cluster,
     get_all_types,
     get_type_position,
@@ -102,6 +103,10 @@ class TestGSD(BaseTest):
         new_snap = snap_delete_types(snap_bond, "A")
         assert "A" not in new_snap.particles.types
 
+    def test_get_centers(self, gsdfile):
+        centers = get_centers(gsdfile, "centers.gsd")
+        assert isinstance(centers, type(None))
+
     @pytest.mark.skip(reason="HOOMD2 required for testing")
     def test_xml_to_gsd(self, tmp_path, p3ht_gsd, p3ht_xml):
         new_gsd = tmp_path / "new.gsd"
@@ -113,4 +118,3 @@ class TestGSD(BaseTest):
             old_snap.particles.position == new_snap.particles.position
         )
         assert np.all(old_snap.particles.image == new_snap.particles.image)
-

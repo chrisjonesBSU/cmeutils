@@ -77,29 +77,35 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
     vectors : List of arrays
         The Re vector for each chain for every frame
     """
-    re_array = [] # distances
-    re_means = [] # mean re distance
+    re_array = [] # distances (List of arrays)
+    re_means = [] # mean re distances
     re_stds = [] # std of re distances
-    vectors = [] # end-to-end vectors (list of lists)
-    #TODO: PBC conditions.
+    vectors = [] # end-to-end vectors (List of arrays)
     with gsd.hoomd.open(gsd_file) as traj:
         for snap in traj[start:stop]:
             unwrap_adj = snap.particles.image * snap.configuration.box[:3]
             unwrap_pos = snap.particles.position + unwrap_adj
-            snap_res = [] # snap vectors
             cl, cl_prop = get_molecule_cluster(snap=snap)
-            for i in cl.cluster_keys:
-                #head = snap.particles.position[i[head_index]]
+            # Create arrays with length of N polymer chains
+            snap_re_vectors = np.zeros(len(cl.cluster_keys))
+            snap_re_distances = np.zeros(len(cl.cluster_keys))
+            #snap_re_vectors = [] # snap vectors
+            #snap_re_distances = [] # snap Re distances
+            # Iterate through each polymer chain
+            for idx, i in cl.cluster_keys:
                 head = unwrap_pos[i[head_index]]
                 tail = unwrap_pos[i[tail_index]]
-                #tail = snap.particles.position[i[tail_index]]
                 vec = tail - head
-                snap_res.append(vec)
-            re_array.extend(np.linalg.norm(snap_res, axis=0))
-            re_means.append(np.mean(np.linalg.norm(snap_res)))
-            re_stds.append(np.std(np.linalg.norm(snap_res)))
-            vectors.append(snap_res)
-    return (re_array, re_means, re_stds, vectors)
+                snap_re_vectors[idx] = vec
+                snap_re_distances[idx] = np.linalg.norm(vec)
+                #snap_re_vectors.append(vec)
+                #snap_re_distances.append(np.linalg.norm(vec))
+
+            re_array.append(snap_re_vectors)
+            re_means.append(np.mean(snap_re_distances)) 
+            re_stds.append(np.std(snap_re_distances))
+            vectors.append(snap_re_vectors)
+    return (np.array(re_means), np.array(re_stds), re_array, vectors)
 
 
 def nematic_order_param(vectors, director):
