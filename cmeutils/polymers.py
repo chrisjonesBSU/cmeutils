@@ -87,19 +87,15 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
             unwrap_pos = snap.particles.position + unwrap_adj
             cl, cl_prop = get_molecule_cluster(snap=snap)
             # Create arrays with length of N polymer chains
-            snap_re_vectors = np.zeros(len(cl.cluster_keys))
+            snap_re_vectors = np.zeros(shape=(len(cl.cluster_keys), 3))
             snap_re_distances = np.zeros(len(cl.cluster_keys))
-            #snap_re_vectors = [] # snap vectors
-            #snap_re_distances = [] # snap Re distances
             # Iterate through each polymer chain
-            for idx, i in cl.cluster_keys:
+            for idx, i in enumerate(cl.cluster_keys):
                 head = unwrap_pos[i[head_index]]
                 tail = unwrap_pos[i[tail_index]]
                 vec = tail - head
                 snap_re_vectors[idx] = vec
                 snap_re_distances[idx] = np.linalg.norm(vec)
-                #snap_re_vectors.append(vec)
-                #snap_re_distances.append(np.linalg.norm(vec))
 
             re_array.append(snap_re_vectors)
             re_means.append(np.mean(snap_re_distances)) 
