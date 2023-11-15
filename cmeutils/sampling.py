@@ -1,9 +1,10 @@
 import numpy as np
 from pymbar import timeseries
 
+
 def equil_sample(
-        data, threshold_fraction=0.0, threshold_neff=1, conservative=True
-    ):
+    data, threshold_fraction=0.0, threshold_neff=1, conservative=True
+):
     """Returns a statistically independent subset of an array of data.
 
     Parameters
@@ -17,7 +18,7 @@ def equil_sample(
         'equilibrated'.
     conservative : bool, default=True
         if set to True, uniformly-spaced indices are chosen with interval
-        ceil(g), where g is the statistical inefficiency.  
+        ceil(g), where g is the statistical inefficiency.
         Otherwise, indices are chosen non-uniformly with interval of
         approximately g in order to end up with approximately T/g total indices
 
@@ -27,15 +28,15 @@ def equil_sample(
 
     """
     is_equil, prod_start, ineff, Neff = is_equilibrated(
-            data, threshold_fraction, threshold_neff
+        data, threshold_fraction, threshold_neff
     )
 
     if is_equil:
         uncorr_indices = timeseries.subsample_correlated_data(
-                data[prod_start:], g=ineff, conservative=conservative
+            data[prod_start:], g=ineff, conservative=conservative
         )
         uncorr_sample = data[prod_start:][uncorr_indices]
-        return(uncorr_sample, uncorr_indices, prod_start, ineff, Neff)
+        return (uncorr_sample, uncorr_indices, prod_start, Neff)
 
     else:
         raise ValueError(
@@ -43,6 +44,7 @@ def equil_sample(
             "expected. More production data is needed, or the threshold needs "
             "to be lowered. See is_equilibrated for more information."
         )
+
 
 def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
     """Check if a dataset is equilibrated based on a fraction of equil data.
@@ -80,7 +82,7 @@ def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
     list : [True, t0, g, Neff]
         If the data set is considered properly equilibrated
         t0: Index of the beginning of the equilibrated region
-        g: Statistical inefficienty of equilibrated data 
+        g: Statistical inefficienty of equilibrated data
         Neff: The number of uncorrelated samples
     list : [False, None, None, None]
         If the data set is not considered properly equilibrated
@@ -107,11 +109,11 @@ def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
 
 
 def autocorr1D(array):
-    '''
+    """
     Takes in a linear numpy array, performs autocorrelation
     function and returns normalized array with half the length
     of the input.
-    '''
-    ft = np.fft.rfft(array-np.average(array))
-    acorr = np.fft.irfft(ft*np.conjugate(ft))/(len(array)*np.var(array))
-    return acorr[0:int(len(acorr)/2)]
+    """
+    ft = np.fft.rfft(array - np.average(array))
+    acorr = np.fft.irfft(ft * np.conjugate(ft)) / (len(array) * np.var(array))
+    return acorr[0 : int(len(acorr) / 2)]

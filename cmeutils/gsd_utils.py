@@ -5,15 +5,31 @@ import gsd.hoomd
 import hoomd
 import numpy as np
 
+from cmeutils import gsd_utils
 from cmeutils.geometry import moit
 
 
+def frame_to_freud_system(frame, ref_length=None):
+    """Creates a freud system given a gsd.hoomd.Frame.
+
+    Parameters
+    ----------
+    frame : gsd.hoomd.Frame, required
+        Frame used to get box and particle positions.
+    ref_length : float, optional, default None
+        Set a reference length to convert from reduced units to real units.
+        If None, uses 1 by default.
+    """
+    if ref_length is None:
+        ref_length = 1
+    box = frame.configuration.box
+    box[0:3] *= ref_length
+    xyz = frame.particles.position * ref_length
+    return freud.locality.NeighborQuery.from_system(system=(box, xyz))
+
+
 def get_type_position(
-    typename,
-    gsd_file=None,
-    snap=None,
-    gsd_frame=-1,
-    images=False
+    typename, gsd_file=None, snap=None, gsd_frame=-1, images=False
 ):
     """Get the positions of a particle type.
 
@@ -25,12 +41,12 @@ def get_type_position(
     ----------
     typename : str or list of str
         Name of particles of which to get the positions (found in
-        gsd.hoomd.Snapshot.particles.types)
+        gsd.hoomd.Frame.particles.types)
         If you want the positions of multiple types, pass in a list
         e.g., ['ca', 'c3']
     gsd_file : str, default None
         Filename of the gsd trajectory
-    snap : gsd.hoomd.Snapshot, default None
+    snap : gsd.hoomd.Frame, default None
         Trajectory snapshot
     gsd_frame : int, default -1
         Frame number to get positions from. Supports negative indexing.
@@ -51,7 +67,7 @@ def get_type_position(
     type_images = []
     for _type in typename:
         type_pos.extend(
-                snap.particles.position[
+            snap.particles.position[
                 snap.particles.typeid == snap.particles.types.index(_type)
             ]
         )
@@ -74,7 +90,7 @@ def get_all_types(gsd_file=None, snap=None, gsd_frame=-1):
     ----------
     gsd_file : str, default None
         Filename of the gsd trajectory
-    snap : gsd.hoomd.Snapshot, default None
+    snap : gsd.hoomd.Frame, default None
         Trajectory snapshot
     gsd_frame : int, default -1
         Frame number to get positions from. Supports negative indexing.
@@ -98,7 +114,7 @@ def get_molecule_cluster(gsd_file=None, snap=None, gsd_frame=-1):
     ----------
     gsd_file : str, default None
         Filename of the gsd trajectory
-    snap : gsd.hoomd.Snapshot, default None
+    snap : gsd.hoomd.Frame, default None
         Trajectory snapshot.
     gsd_frame : int, default -1
         Frame number of gsd_file to use to compute clusters.
@@ -131,13 +147,13 @@ def _validate_inputs(gsd_file, snap, gsd_frame):
     if gsd_file:
         assert isinstance(gsd_frame, int)
         try:
-            with gsd.hoomd.open(name=gsd_file, mode="rb") as f:
+            with gsd.hoomd.open(name=gsd_file, mode="r") as f:
                 snap = f[gsd_frame]
         except Exception as e:
             print("Unable to open the gsd_file")
             raise e
     elif snap:
-        assert isinstance(snap, gsd.hoomd.Snapshot)
+        assert isinstance(snap, gsd.hoomd.Frame)
     return snap
 
 
@@ -154,15 +170,15 @@ def snap_delete_types(snap, delete_types):
 
     Parameters
     ----------
-    snap : gsd.hoomd.Snapshot
+    snap : gsd.hoomd.Frame
         The snapshot to read in
 
     Returns
     -------
-    gsd.hoomd.Snapshot
+    gsd.hoomd.Frame
         The new snapshot with particles deleted.
     """
-    new_snap = gsd.hoomd.Snapshot()
+    new_snap = gsd.hoomd.Frame()
     delete_ids = [snap.particles.types.index(i) for i in delete_types]
     selection = np.where(~np.isin(snap.particles.typeid, delete_ids))[0]
     new_snap.particles.N = len(selection)
@@ -170,7 +186,7 @@ def snap_delete_types(snap, delete_types):
         i for i in snap.particles.types if i not in delete_types
     ]
     typeid_map = {
-        i:new_snap.particles.types.index(e)
+        i: new_snap.particles.types.index(e)
         for i, e in enumerate(snap.particles.types)
         if e in new_snap.particles.types
     }
@@ -183,7 +199,7 @@ def snap_delete_types(snap, delete_types):
     if snap.bonds.N > 0:
         bonds = np.isin(snap.bonds.group, selection).all(axis=1)
         if bonds.any():
-            inds = {e:i for i, e in enumerate(selection)}
+            inds = {e: i for i, e in enumerate(selection)}
             new_snap.bonds.group = np.vectorize(inds.get)(
                 snap.bonds.group[bonds]
             )
@@ -197,7 +213,7 @@ def create_rigid_snapshot(mb_compound):
 
     This method relies on using built-in mBuild methods to
     create the rigid body information.
-    
+
     Parameters
     ----------
     mb_compound : mbuild.Compound, required
@@ -231,7 +247,7 @@ def update_rigid_snapshot(snapshot, mb_compound):
 
     Parameters
     ----------
-    snapshot : gsd.hoomd.Snapshot
+    snapshot : gsd.hoomd.Frame
         The snapshot returned from create_hoomd_forcefield
         or create_hoomd_simulation in mBuild
     mb_compound : mbuild.Compound, required
@@ -243,34 +259,34 @@ def update_rigid_snapshot(snapshot, mb_compound):
     rigid_bodies = set(rigid_ids)
     # Total number of rigid body particles
     N_mols = len(rigid_bodies)
-    N_p =  [rigid_ids.count(i) for i in rigid_bodies]
-	# Right now, we're assuming each molecule has the same num of particles
+    N_p = [rigid_ids.count(i) for i in rigid_bodies]
+    # Right now, we're assuming each molecule has the same num of particles
     assert len(set(N_p)) == 1
-    N_p = N_p[0] # Number of particles per molecule
+    N_p = N_p[0]  # Number of particles per molecule
     mol_inds = [
         np.arange(N_mols + i * N_p, N_mols + i * N_p + N_p)
         for i in range(N_mols)
     ]
 
     for i, inds in enumerate(mol_inds):
-	    total_mass = np.sum(snapshot.particles.mass[inds])
-	    com = (
-		    np.sum(
-			    snapshot.particles.position[inds]
-			    * snapshot.particles.mass[inds, np.newaxis],
+        total_mass = np.sum(snapshot.particles.mass[inds])
+        com = (
+            np.sum(
+                snapshot.particles.position[inds]
+                * snapshot.particles.mass[inds, np.newaxis],
                 axis=0,
-		    )
-		    / total_mass
-	    )
-	    snapshot.particles.position[i] = com
-	    snapshot.particles.body[i] = i
-	    snapshot.particles.body[inds] = i * np.ones_like(inds)
-	    snapshot.particles.mass[i] = np.sum(snapshot.particles.mass[inds])
-	    snapshot.particles.moment_inertia[i] = moit(
-		    snapshot.particles.position[inds],
-		    snapshot.particles.mass[inds],
-		    center=com,
-	    )
+            )
+            / total_mass
+        )
+        snapshot.particles.position[i] = com
+        snapshot.particles.body[i] = i
+        snapshot.particles.body[inds] = i * np.ones_like(inds)
+        snapshot.particles.mass[i] = np.sum(snapshot.particles.mass[inds])
+        snapshot.particles.moment_inertia[i] = moit(
+            snapshot.particles.position[inds],
+            snapshot.particles.mass[inds],
+            center=com,
+        )
 
     rigid = hoomd.md.constrain.Rigid()
     inds = mol_inds[0]
@@ -279,19 +295,15 @@ def update_rigid_snapshot(snapshot, mb_compound):
     c_pos -= r_pos
     c_pos = [tuple(i) for i in c_pos]
     c_types = [
-            snapshot.particles.types[i] for i in snapshot.particles.typeid[inds]
+        snapshot.particles.types[i] for i in snapshot.particles.typeid[inds]
     ]
     c_orient = [tuple(i) for i in snapshot.particles.orientation[inds]]
-    c_charge = [i for i in snapshot.particles.charge[inds]]
-    c_diam = [i for i in snapshot.particles.diameter[inds]]
 
     rigid.body["R"] = {
-            "constituent_types": c_types,
-            "positions": c_pos,
-            "charges": c_charge,
-            "orientations": c_orient,
-            "diameters": c_diam,
-    } 
+        "constituent_types": c_types,
+        "positions": c_pos,
+        "orientations": c_orient,
+    }
     return snapshot, rigid
 
 
@@ -299,11 +311,11 @@ def ellipsoid_gsd(gsd_file, new_file, lpar, lperp):
     """Add needed information to GSD file to visualize ellipsoids.
 
     Saves a new GSD file with lpar and lperp values populated
-    for each particle. Ovito can be used to visualize the new GSD file. 
-	
+    for each particle. Ovito can be used to visualize the new GSD file.
+
     Parameters
     ----------
-    gsd_file : str 
+    gsd_file : str
         Path to the original GSD file containing trajectory information
     new_file : str
         Path and filename of the new GSD file
@@ -311,26 +323,15 @@ def ellipsoid_gsd(gsd_file, new_file, lpar, lperp):
         Value of lpar of the ellipsoids
     lperp : float
         Value of lperp of the ellipsoids
-	
-	"""
-    with gsd.hoomd.open(new_file, "wb") as new_t:
+
+    """
+    with gsd.hoomd.open(new_file, "w") as new_t:
         with gsd.hoomd.open(gsd_file) as old_t:
             for snap in old_t:
                 snap.particles.type_shapes = [
-                    {
-                        "type": "Ellipsoid",
-                        "a": lpar,
-                        "b": lperp,
-                        "c": lperp
-                    },
-                    {
-                        "type": "Sphere",
-                        "diameter": 0.01
-                    },
-                                  {
-                        "type": "Sphere",
-                        "diameter": 0.01
-                    }
+                    {"type": "Ellipsoid", "a": lpar, "b": lperp, "c": lperp},
+                    {"type": "Sphere", "diameter": 0.01},
+                    {"type": "Sphere", "diameter": 0.01},
                 ]
                 snap.validate()
                 new_t.append(snap)
@@ -354,7 +355,7 @@ def xml_to_gsd(xmlfile, gsdfile):
         import hoomd.deprecated
     except ImportError:
         raise ImportError(
-                "You must have hoomd version 2 installed to use xml_to_gsd()"
+            "You must have hoomd version 2 installed to use xml_to_gsd()"
         )
 
     hoomd.util.quiet_status()
@@ -366,24 +367,25 @@ def xml_to_gsd(xmlfile, gsdfile):
             period=None,
             group=hoomd.group.all(),
             dynamic=["momentum"],
-            overwrite=True
+            overwrite=True,
         )
         hoomd.util.unquiet_status()
-        with gsd.hoomd.open(f.name) as t, gsd.hoomd.open(gsdfile, "wb") as newt:
+        with gsd.hoomd.open(f.name) as t, gsd.hoomd.open(gsdfile, "w") as newt:
             snap = t[0]
             bonds = snap.bonds.group
-            bonds = bonds[np.lexsort((bonds[:,1], bonds[:,0]))]
+            bonds = bonds[np.lexsort((bonds[:, 1], bonds[:, 0]))]
             snap.bonds.group = bonds
             newt.append(snap)
     print(f"XML data written to {gsdfile}")
 
 
 def get_centers(gsdfile, new_gsdfile):
-    """Create a gsd file containing the molecule centers from an existing gsd file.
+    """Create a gsd file of the molecule centers from another gsd file.
 
 
     This function calculates the centers of a trajectory given a GSD file
-    and stores them into a new GSD file just for centers. By default it will calculate the centers of an entire trajectory.
+    and stores them into a new GSD file just for centers.
+    By default it will calculate the centers of an entire trajectory.
 
     Parameters
     ----------
@@ -392,7 +394,9 @@ def get_centers(gsdfile, new_gsdfile):
     new_gsdfile : str
         Filename of new GSD for centers.
     """
-    with gsd.hoomd.open(new_gsdfile, 'wb') as new_traj, gsd.hoomd.open(gsdfile, 'rb') as traj:
+    with gsd.hoomd.open(new_gsdfile, "wb") as new_traj, gsd.hoomd.open(
+        gsdfile, "rb"
+    ) as traj:
         snap = traj[0]
         cluster_idx = gsd_utils.get_molecule_cluster(snap=snap)
         for snap in traj:
@@ -400,11 +404,13 @@ def get_centers(gsdfile, new_gsdfile):
             new_snap.configuration.box = snap.configuration.box
             f_box = freud.box.Box.from_box(snap.configuration.box)
             # Use the freud box to unwrap the particle positions
-            unwrapped_positions = f_box.unwrap(snap.particles.position, snap.particles.image)
+            unwrapped_positions = f_box.unwrap(
+                snap.particles.position, snap.particles.image
+            )
             uw_centers = []
-            for i in range(max(cluster_idx)+1):
+            for i in range(max(cluster_idx) + 1):
                 cluster_uw_pos = unwrapped_positions[np.where(cluster_idx == i)]
-                uw_centers.append(np.mean(cluster_uw_pos, axis = 0))
+                uw_centers.append(np.mean(cluster_uw_pos, axis=0))
             uw_centers = np.stack(uw_centers)
             new_snap.particles.position = f_box.wrap(uw_centers)
             new_snap.particles.N = len(uw_centers)

@@ -1,11 +1,11 @@
 from os import path
-import pytest
-import tempfile
 
 import gsd.hoomd
 import numpy as np
+import pytest
 from pymbar.testsystems import correlated_timeseries_example
 
+from cmeutils.visualize import FresnelGSD
 
 asset_dir = path.join(path.dirname(__file__), "assets")
 
@@ -31,13 +31,13 @@ class BaseTest:
 
     @pytest.fixture
     def snap(self, gsdfile):
-        with gsd.hoomd.open(name=gsdfile, mode="rb") as f:
+        with gsd.hoomd.open(name=gsdfile, mode="r") as f:
             snap = f[-1]
         return snap
 
     @pytest.fixture
     def snap_bond(self, gsdfile_bond):
-        with gsd.hoomd.open(name=gsdfile_bond, mode="rb") as f:
+        with gsd.hoomd.open(name=gsdfile_bond, mode="r") as f:
             snap = f[-1]
         return snap
 
@@ -65,10 +65,14 @@ class BaseTest:
     def correlated_data_tau100_n10000(self):
         return correlated_timeseries_example(N=10000, tau=100, seed=432)
 
+    @pytest.fixture
+    def p3ht_fresnel(self):
+        return FresnelGSD(gsd_file=path.join(asset_dir, "p3ht.gsd"))
+
 
 def create_frame(i, add_bonds, images, seed=42):
     np.random.seed(seed)
-    s = gsd.hoomd.Snapshot()
+    s = gsd.hoomd.Frame()
     s.configuration.step = i
     s.particles.N = 5
     s.particles.types = ["A", "B"]
@@ -81,15 +85,15 @@ def create_frame(i, add_bonds, images, seed=42):
         s.bonds.typeid = [0, 0, 1]
         s.bonds.group = [[0, 2], [1, 3], [3, 4]]
     if images:
-        s.particles.image = np.full(shape=(5,3), fill_value=i)
+        s.particles.image = np.full(shape=(5, 3), fill_value=i)
     else:
-        s.particles.image = np.zeros(shape=(5,3))
+        s.particles.image = np.zeros(shape=(5, 3))
     s.validate()
     return s
 
 
 def create_gsd(filename, add_bonds=False, images=False):
-    with gsd.hoomd.open(name=filename, mode="wb") as f:
+    with gsd.hoomd.open(name=filename, mode="w") as f:
         f.extend(
             [
                 create_frame(i, add_bonds=add_bonds, images=images)
