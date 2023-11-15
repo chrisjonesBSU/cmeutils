@@ -11,6 +11,7 @@ dependencies:
   - pip
   - python >= 3.10
   - matplotlib
+  - mdanalysis
   - pre-commit
   - pymbar >= 4.0
   - pytest
