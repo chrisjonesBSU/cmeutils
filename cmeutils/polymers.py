@@ -8,8 +8,8 @@ from cmeutils import gsd_utils
 from cmeutils.gsd_utils import get_molecule_cluster
 
 
-def get_bond_vectors(snapshot, bond_types):
-    """Get all normalized bond vectors of matching bond types.
+def get_bond_vectors(snapshot, bond_type_filter=None):
+    """Get all normalized bond vectors of a certain bond type.
 
     Parameters
     ---------
@@ -25,8 +25,10 @@ def get_bond_vectors(snapshot, bond_types):
         List of all normalized bond vectors matching bond_types
 
     """
+    if not bond_type_filter:
+        bond_type_filter = snapshot.bonds.types
     vectors = []
-    for bond in bond_types:
+    for bond in bond_type_filter:
         if bond not in snapshot.bonds.types:
             raise ValueError(
                 f"Bond type {bond} not found in snapshot.bonds.types"
@@ -42,7 +44,7 @@ def get_bond_vectors(snapshot, bond_types):
 
 
 def radius_of_gyration(gsd_file, start=0, stop=-1):
-    """Calculates the radius of gyration.
+    """Calculates the radius of gyration using Freud's cluster module.
 
     Parameters
     ----------
@@ -62,7 +64,7 @@ def radius_of_gyration(gsd_file, start=0, stop=-1):
     rg_std : List of floats
         Standard deviations of Rg values for each frame
     """
-    trajectory = gsd.hoomd.open(gsd_file, mode="rb")
+    trajectory = gsd.hoomd.open(gsd_file, mode="r")
     rg_values = []
     rg_means = []
     rg_std = []
@@ -105,7 +107,7 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
     re_means = []  # mean re distances
     re_stds = []  # std of re distances
     vectors = []  # end-to-end vectors (List of arrays)
-    with gsd.hoomd.open(gsd_file) as traj:
+    with gsd.hoomd.open(gsd_file, "r") as traj:
         for snap in traj[start:stop]:
             unwrap_adj = snap.particles.image * snap.configuration.box[:3]
             unwrap_pos = snap.particles.position + unwrap_adj
@@ -131,7 +133,7 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
 def persistence_length(
     gsd_file, select_atoms_arg, window_size, start=0, stop=1
 ):
-    """Performs time-average sampling of persistence length using MDAnalysis
+    """Performs time-average sampling of persistence length using MDAnalysis.
 
     See:
     https://docs.mdanalysis.org/stable/documentation_pages/analysis/polymer.html
