@@ -101,8 +101,8 @@ class TestGSD(BaseTest):
         assert types == ["A", "B"]
 
     def test_get_molecule_cluster(self, gsdfile_bond):
-        cluster = get_molecule_cluster(gsd_file=gsdfile_bond)
-        assert np.array_equal(cluster, [1, 0, 1, 0, 0])
+        cluster, cluster_props = get_molecule_cluster(gsd_file=gsdfile_bond)
+        assert np.array_equal(cluster.cluster_idx, [1, 0, 1, 0, 0])
 
     def test_snap_delete_types(self, snap):
         new_snap = snap_delete_types(snap, "A")

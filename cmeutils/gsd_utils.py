@@ -394,8 +394,8 @@ def get_centers(gsdfile, new_gsdfile):
     new_gsdfile : str
         Filename of new GSD for centers.
     """
-    with gsd.hoomd.open(new_gsdfile, "wb") as new_traj, gsd.hoomd.open(
-        gsdfile, "rb"
+    with gsd.hoomd.open(new_gsdfile, "w") as new_traj, gsd.hoomd.open(
+        gsdfile, "r"
     ) as traj:
         snap = traj[0]
         cluster_idx = gsd_utils.get_molecule_cluster(snap=snap)
