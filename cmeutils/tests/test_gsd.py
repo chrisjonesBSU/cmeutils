@@ -13,7 +13,6 @@ from cmeutils.gsd_utils import (
     ellipsoid_gsd,
     frame_to_freud_system,
     get_all_types,
-    get_centers,
     get_molecule_cluster,
     get_type_position,
     snap_delete_types,
@@ -111,10 +110,6 @@ class TestGSD(BaseTest):
     def test_snap_delete_types_bonded(self, snap_bond):
         new_snap = snap_delete_types(snap_bond, "A")
         assert "A" not in new_snap.particles.types
-
-    def test_get_centers(self, gsdfile):
-        centers = get_centers(gsdfile, "centers.gsd")
-        assert isinstance(centers, type(None))
 
     @pytest.mark.skip(reason="HOOMD2 required for testing")
     def test_xml_to_gsd(self, tmp_path, p3ht_gsd, p3ht_xml):

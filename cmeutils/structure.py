@@ -429,7 +429,8 @@ def gsd_rdf(
         type_B = snap.particles.typeid == snap.particles.types.index(B_name)
 
         if exclude_bonded:
-            molecules = get_molecule_cluster(snap=snap)
+            cluster, _ = get_molecule_cluster(snap=snap)
+            molecules = cluster.cluster_idx
             molecules_A = molecules[type_A]
             molecules_B = molecules[type_B]
 
@@ -602,7 +603,8 @@ def get_centers(gsdfile, new_gsdfile):
         gsdfile, "r"
     ) as traj:
         snap = traj[0]
-        cluster_idx = get_molecule_cluster(snap=snap)
+        cluster, _ = get_molecule_cluster(snap=snap)
+        cluster_idx = cluster.cluster_idx
         for snap in traj:
             new_snap = gsd.hoomd.Frame()
             new_snap.configuration.box = snap.configuration.box
