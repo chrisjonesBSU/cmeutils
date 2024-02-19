@@ -1,7 +1,7 @@
 import gsd
 import numpy as np
 
-from cmeutils.polymers import get_bond_vectors
+from cmeutils.polymers import get_bond_vectors, radius_of_gyration
 from cmeutils.tests.base_test import BaseTest
 
 
@@ -22,7 +22,14 @@ class TestPolymers(BaseTest):
         assert len(ek_vecs) + len(kk_vecs) == len(vecs)
 
     def test_radius_of_gyration(self, butane_gsd):
-        pass
+        rg_means, rg_stds, rg_values = radius_of_gyration(
+            gsd_file=butane_gsd, start=0, stop=-1
+        )
+        assert len(rg_values[0]) == 5
+        assert np.allclose(rg_stds[0], 0, atol=1e-3)
+        for i in rg_values:
+            for j in i:
+                assert np.allclose(j, rg_values[0][0], atol=1e-2)
 
     def test_end_to_end_distance(self, butane_gsd):
         pass
