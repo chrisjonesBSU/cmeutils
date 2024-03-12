@@ -380,6 +380,15 @@ def xml_to_gsd(xmlfile, gsdfile):
     print(f"XML data written to {gsdfile}")
 
 
+def gsd_to_dcd(gsd_file, dcd_file):
+    import MDAnalysis as mda
+
+    u = mda.Universe(gsd_file)
+    with mda.WRiter(dcd_file, u.atoms.n_atoms) as w:
+        for ts in u.trajectory:
+            w.write(u)
+
+
 def identify_snapshot_connections(snapshot):
     """Identify angle and dihedral connections in a snapshot from bonds.
 
