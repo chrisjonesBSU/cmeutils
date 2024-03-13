@@ -384,7 +384,7 @@ def gsd_to_dcd(gsd_file, dcd_file):
     import MDAnalysis as mda
 
     u = mda.Universe(gsd_file)
-    with mda.WRiter(dcd_file, u.atoms.n_atoms) as w:
+    with mda.Writer(dcd_file, u.atoms.n_atoms) as w:
         for ts in u.trajectory:
             w.write(u)
 

@@ -8,6 +8,7 @@ dependencies:
   - gsd >=3.0
   - hoomd >=4.0
   - mbuild >=0.16.4
+  - mdanalysis
   - numpy
   - pip
   - python >= 3.10
