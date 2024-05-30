@@ -109,11 +109,20 @@ def is_equilibrated(data, threshold_fraction=0.50, threshold_neff=50, nskip=1):
 
 
 def autocorr1D(array):
-    """
-    Takes in a linear numpy array, performs autocorrelation
+    """Takes in a linear np array, performs autocorrelation
     function and returns normalized array with half the length
     of the input.
+
+    Parameters
+    ----------
+    data : numpy.typing.Arraylike, required
+        1-D series of data to perform autocorrelation on.
+
+    Returns
+    -------
+    1D np.array
+
     """
     ft = np.fft.rfft(array - np.average(array))
     acorr = np.fft.irfft(ft * np.conjugate(ft)) / (len(array) * np.var(array))
-    return acorr[0 : int(len(acorr) / 2)]
+    return acorr[0 : len(acorr) // 2]  # noqa: E203
