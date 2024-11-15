@@ -43,7 +43,7 @@ def get_bond_vectors(snapshot, bond_type_filter=None):
     return vectors
 
 
-def radius_of_gyration(gsd_file, start=0, stop=-1):
+def radius_of_gyration(gsd_file, start=0, stop=-1, stride=1):
     """Calculates the radius of gyration using Freud's cluster module.
 
     Parameters
@@ -68,7 +68,7 @@ def radius_of_gyration(gsd_file, start=0, stop=-1):
     rg_values = []
     rg_means = []
     rg_std = []
-    for snap in trajectory[start:stop]:
+    for snap in trajectory[start:stop:stride]:
         clusters, cl_props = gsd_utils.get_molecule_cluster(snap=snap)
         rg_values.append(cl_props.radii_of_gyration)
         rg_means.append(np.mean(cl_props.radii_of_gyration))
@@ -76,7 +76,14 @@ def radius_of_gyration(gsd_file, start=0, stop=-1):
     return rg_means, rg_std, rg_values
 
 
-def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
+def end_to_end_distance(
+        gsd_file,
+        head_index,
+        tail_index,
+        start=0,
+        stop=-1,
+        stride=1,
+):
     """Calculates the chain end-to-end distances.
 
     Parameters
@@ -108,7 +115,7 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
     re_stds = []  # std of re distances
     vectors = []  # end-to-end vectors (List of arrays)
     with gsd.hoomd.open(gsd_file, "r") as traj:
-        for snap in traj[start:stop]:
+        for snap in traj[start:stop:stride]:
             unwrap_adj = snap.particles.image * snap.configuration.box[:3]
             unwrap_pos = snap.particles.position + unwrap_adj
             cl, cl_prop = get_molecule_cluster(snap=snap)
@@ -127,7 +134,7 @@ def end_to_end_distance(gsd_file, head_index, tail_index, start=0, stop=-1):
             re_means.append(np.mean(snap_re_distances))
             re_stds.append(np.std(snap_re_distances))
             vectors.append(snap_re_vectors)
-    return (np.array(re_means), np.array(re_stds), re_array, vectors)
+    return np.array(re_means), np.array(re_stds), re_array, vectors
 
 
 def persistence_length(
