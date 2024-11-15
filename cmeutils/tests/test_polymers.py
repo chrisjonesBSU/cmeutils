@@ -31,8 +31,9 @@ class TestPolymers(BaseTest):
             for j in i:
                 assert np.allclose(j, rg_values[0][0], atol=1e-2)
 
-    def test_end_to_end_distance(self, butane_gsd):
+    def test_end_to_end_distance(self, pekk_cg_gsd):
         pass
+        # 14.34
 
     def test_persistence_length(self, butane_gsd):
         pass
