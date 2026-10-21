@@ -1,6 +1,7 @@
 import itertools
 import warnings
 
+import finufft
 import freud
 import gsd
 import gsd.hoomd
@@ -648,6 +649,258 @@ def structure_factor(
             system = frame_to_freud_system(frame=frame, ref_length=ref_length)
             sf.compute(system=system, reset=False)
     return sf
+
+
+def structure_factor_nufft(
+    gsdfile,
+    k_min,
+    k_max,
+    start=0,
+    stop=-1,
+    stride=1,
+    bins=100,
+    types=None,
+    ref_length=None,
+    eps=1e-9,
+    nthreads=0,
+):
+    """Powder structure factor S(k) averaged over a GSD trajectory, using a
+    non-uniform FFT (finufft) instead of freud's direct sum.
+
+    Computes the same quantity as ``structure_factor(method="direct")``
+    (averaged over the full |k| shell), but evaluates every box-commensurate
+    k in one NUFFT per frame. This is orders of magnitude faster for large
+    systems or large k_max, but can be more memory intensive.
+    See ``structure_factor_from_positions`` for the k grid, normalization and
+    binning conventions, and to compute S(k) of a single configuration or
+    a per-group (incoherent) sum.
+
+    Parameters
+    ----------
+    gsdfile : str, required
+        File path to the GSD trajectory.
+    k_min : float, required
+        Minimum |k| included in the calculation.
+    k_max : float, required
+        Maximum |k| included in the calculation (exclusive).
+    start : int, default = 0
+        Starting frame index for accumulating S(k). Negative numbers index
+        from the end.
+    stop : int, optional default = -1
+        Final frame index for accumulating S(k).
+    stride : int, default = 1
+        The stride size when iterating through start:stop
+    bins : int, optional default 100
+        Number of |k| bins between k_min and k_max.
+    types : str or list of str, optional, default None
+        Particle type name(s) to include (found in
+        gsd.hoomd.Frame.particles.types). If None, all particles are used.
+    ref_length : float, optional, default None
+        Set a reference length to convert from reduced units to real units.
+        If None, uses 1 by default. k_min and k_max are in units of
+        1 / ref_length.
+    eps : float, optional, default 1e-9
+        finufft tolerance. Relative to the sum of the (unit) particle
+        strengths, so the absolute error of F(k) scales with N.
+    nthreads : int, optional, default 0
+        Number of threads used by finufft. 0 uses all cores.
+
+    Returns
+    -------
+    tuple(k, S) : (numpy.ndarray, numpy.ndarray)
+        Bin centers and S(k) per bin. Each frame's bin means are combined
+        weighted by the number of k in each bin (this is the plain mean over
+        frames when the box is constant). Bins with no k are NaN.
+
+    Examples
+    --------
+    S(k) of the carbon types over the last 10 frames:
+
+    >>> k, S = structure_factor_nufft(
+    ...     "traj.gsd", k_min=1.0, k_max=20.0, bins=200, start=-10,
+    ...     types=["c", "ca"]
+    ... )
+    """
+    if ref_length is None:
+        ref_length = 1
+    if isinstance(types, str):
+        types = [types]
+
+    S_sum = np.zeros(bins)
+    n_sum = np.zeros(bins, dtype=np.int64)
+    with gsd.hoomd.open(gsdfile, mode="r") as trajectory:
+        for frame in trajectory[start:stop:stride]:
+            positions = frame.particles.position
+            if types is not None:
+                missing = set(types) - set(frame.particles.types)
+                if missing:
+                    raise ValueError(f"Types {missing} not found in frame.")
+                type_ids = [frame.particles.types.index(t) for t in types]
+                positions = positions[np.isin(frame.particles.typeid, type_ids)]
+            box = np.array(frame.configuration.box, dtype=np.float64)
+            box[0:3] *= ref_length
+            k, S, n_k = structure_factor_from_positions(
+                positions=positions * ref_length,
+                box=box,
+                k_min=k_min,
+                k_max=k_max,
+                bins=bins,
+                eps=eps,
+                nthreads=nthreads,
+            )
+            S_sum += np.nan_to_num(S) * n_k
+            n_sum += n_k
+    if not n_sum.any():
+        raise ValueError(
+            f"No frames found in {gsdfile}[{start}:{stop}:{stride}]."
+        )
+    S = np.full(bins, np.nan)
+    np.divide(S_sum, n_sum, out=S, where=n_sum > 0)
+    return k, S
+
+
+def structure_factor_from_positions(
+    positions,
+    box,
+    k_min,
+    k_max,
+    bins=100,
+    groups=None,
+    eps=1e-9,
+    nthreads=0,
+):
+    """Powder structure factor S(k) of one configuration using a type-1
+    non-uniform FFT (finufft).
+
+    Notes
+    -----
+    k grid: every k commensurate with the periodic box,
+    k = 2 pi H^-T n for integer vectors n, where H is the box matrix (columns
+    are the box vectors). Triclinic boxes are supported. n = 0 (forward
+    scattering, S = N) is always excluded, including when k_min = 0.
+
+    Normalization: S(k) = |F(k)|^2 / N with F(k) = sum_j exp(i k.r_j), so an
+    ideal gas has S = 1 and a perfect crystal has S = N at its Bragg peaks.
+
+    Binning: edges are ``np.linspace(k_min, k_max, bins + 1)`` and each bin is
+    half open, [lo, hi), compared in float64. S per bin is the mean over all
+    grid k in the bin (the full |k| shell, not one octant). On a regular grid
+    whole symmetry families of k can lie within round-off of an edge, so
+    results in such bins can differ from codes that bin in float32 (e.g.
+    freud).
+
+    With ``groups``, the incoherent sum over groups is returned instead:
+    S(k) = sum_l |F_l(k)|^2 / N, where F_l is the sum over the particles in
+    group l. This equals sum_l (N_l / N) S_l(k).
+
+    Parameters
+    ----------
+    positions : numpy.ndarray, shape (N, 3), required
+        Particle positions. They do not need to be wrapped into the box.
+    box : array-like, required
+        Either 3 box lengths (orthorhombic) or a HOOMD box
+        [Lx, Ly, Lz, xy, xz, yz]. Only 3D boxes are supported.
+    k_min : float, required
+        Minimum |k| included in the calculation.
+    k_max : float, required
+        Maximum |k| included in the calculation (exclusive).
+    bins : int, optional default 100
+        Number of |k| bins between k_min and k_max.
+    groups : array-like, shape (N,), optional, default None
+        Group label of each particle. If given, the incoherent sum over
+        groups is returned (see Notes).
+    eps : float, optional, default 1e-9
+        finufft tolerance. Relative to the sum of the (unit) particle
+        strengths, so the absolute error of F(k) scales with N.
+    nthreads : int, optional, default 0
+        Number of threads used by finufft. 0 uses all cores.
+
+    Returns
+    -------
+    tuple(k, S, n_k) : (numpy.ndarray, numpy.ndarray, numpy.ndarray)
+        Bin centers, S(k) per bin, and the number of grid k in each bin
+        (useful to merge or re-weight results). Bins with no k are NaN.
+    """
+    positions = np.asarray(positions, dtype=np.float64)
+    if positions.ndim != 2 or positions.shape[1] != 3:
+        raise ValueError("positions must have shape (N, 3).")
+    N = len(positions)
+    if N == 0:
+        raise ValueError("No particles given.")
+    if not 0 <= k_min < k_max:
+        raise ValueError("Requires 0 <= k_min < k_max.")
+    if groups is not None:
+        groups = np.asarray(groups)
+        if groups.shape != (N,):
+            raise ValueError("groups must have one label per particle.")
+
+    box = np.asarray(box, dtype=np.float64)
+    if box.shape == (3,):
+        box = np.concatenate([box, np.zeros(3)])
+    if box.shape != (6,):
+        raise ValueError(
+            "box must be [Lx, Ly, Lz] or [Lx, Ly, Lz, xy, xz, yz]."
+        )
+    Lx, Ly, Lz, xy, xz, yz = box
+    if min(Lx, Ly, Lz) <= 0:
+        raise ValueError("Only 3D boxes with positive lengths are supported.")
+    H = np.array([[Lx, xy * Ly, xz * Lz], [0, Ly, yz * Lz], [0, 0, Lz]])
+
+    # Fractional coordinates mapped to [-pi, pi), as rows x, y, z so that
+    # finufft gets contiguous arrays.
+    frac = np.linalg.solve(H, positions.T)
+    x = np.ascontiguousarray(2 * np.pi * ((frac + 0.5) % 1.0 - 0.5))
+
+    # n_a = a_a . k / 2pi, so |n_a| <= |a_a| k_max / 2pi covers the k_max shell.
+    n_max = np.ceil(k_max * np.linalg.norm(H, axis=0) / (2 * np.pi))
+    n_max = n_max.astype(int)
+    n_axes = [np.arange(-m, m + 1) for m in n_max]
+    B = 2 * np.pi * np.linalg.inv(H).T
+    k_sq = np.zeros(tuple(2 * n_max + 1))
+    for row in B:
+        k_sq += (
+            (row[0] * n_axes[0])[:, None, None]
+            + (row[1] * n_axes[1])[None, :, None]
+            + (row[2] * n_axes[2])[None, None, :]
+        ) ** 2
+    k_mag = np.sqrt(k_sq).ravel()
+    del k_sq
+
+    edges = np.linspace(k_min, k_max, bins + 1)
+    bin_idx = np.searchsorted(edges, k_mag, side="right") - 1
+    in_range = (bin_idx >= 0) & (bin_idx < bins)
+    in_range[len(k_mag) // 2] = False  # n = 0 is the center of the grid
+    keep = np.flatnonzero(in_range)
+    bin_idx = bin_idx[keep]
+    del k_mag, in_range
+
+    def _power(xyz):
+        c = np.ones(xyz.shape[1], dtype=np.complex128)
+        F = finufft.nufft3d1(
+            xyz[0],
+            xyz[1],
+            xyz[2],
+            c,
+            tuple(2 * n_max + 1),
+            eps=eps,
+            isign=1,
+            nthreads=nthreads,
+        )
+        return np.abs(F.ravel()[keep]) ** 2
+
+    if groups is None:
+        power = _power(x)
+    else:
+        power = np.zeros(len(keep))
+        for label in np.unique(groups):
+            power += _power(np.ascontiguousarray(x[:, groups == label]))
+
+    n_k = np.bincount(bin_idx, minlength=bins)
+    S_sum = np.bincount(bin_idx, weights=power / N, minlength=bins)
+    S = np.full(bins, np.nan)
+    np.divide(S_sum, n_k, out=S, where=n_k > 0)
+    k = 0.5 * (edges[1:] + edges[:-1])
+    return k, S, n_k
 
 
 def diffraction_pattern(

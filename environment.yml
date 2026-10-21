@@ -6,6 +6,7 @@ dependencies:
   - gmso >=0.17.0
   - fresnel >=0.13.5
   - gsd >=3.0
+  - finufft
   - hoomd >=5.0
   - mbuild >=1.0
   - numpy >=2.0
