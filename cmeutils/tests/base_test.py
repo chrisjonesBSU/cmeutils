@@ -87,6 +87,27 @@ class BaseTest:
         return correlated_timeseries_example(N=10000, tau=100, seed=432)
 
     @pytest.fixture
+    def crystal_gsd(self, tmp_path):
+        """FCC crystal of type A plus random type B, 4 frames each shifted."""
+        positions, box = cubic_crystal("fcc", a=1.0, cells=3)
+        rng = np.random.default_rng(2)
+        filename = tmp_path / "crystal.gsd"
+        with gsd.hoomd.open(filename, mode="w") as traj:
+            for i in range(4):
+                frame = gsd.hoomd.Frame()
+                frame.configuration.step = i
+                frame.configuration.box = box
+                B = rng.uniform(-1.5, 1.5, size=(20, 3))
+                frame.particles.N = len(positions) + len(B)
+                frame.particles.types = ["A", "B"]
+                frame.particles.typeid = [0] * len(positions) + [1] * len(B)
+                frame.particles.position = np.concatenate(
+                    [positions + 0.1 * i, B]
+                )
+                traj.append(frame)
+        return filename
+
+    @pytest.fixture
     def p3ht_fresnel(self):
         return FresnelGSD(gsd_file=path.join(asset_dir, "p3ht.gsd"))
 
@@ -121,3 +142,18 @@ def create_gsd(filename, add_bonds=False, images=False):
                 for i in range(10)
             ]
         )
+
+
+def cubic_crystal(kind, a=1.0, cells=4):
+    """Positions and box of a cubic crystal of cells**3 conventional cells."""
+    basis = {
+        "sc": [[0, 0, 0]],
+        "bcc": [[0, 0, 0], [0.5, 0.5, 0.5]],
+        "fcc": [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]],
+    }[kind]
+    cell = np.stack(
+        np.meshgrid(*[np.arange(cells)] * 3, indexing="ij"), -1
+    ).reshape(-1, 3)
+    positions = (cell[:, None, :] + np.array(basis)[None]).reshape(-1, 3) * a
+    L = cells * a
+    return positions - L / 2, np.array([L, L, L, 0, 0, 0])
