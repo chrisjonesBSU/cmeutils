@@ -668,12 +668,8 @@ def structure_factor_nufft(
     non-uniform FFT (finufft) instead of freud's direct sum.
 
     Computes the same quantity as ``structure_factor(method="direct")``
-    (averaged over the full |k| shell), but evaluates every box-commensurate
-    k in one NUFFT per frame. This is orders of magnitude faster for large
-    systems or large k_max, but can be more memory intensive.
-    See ``structure_factor_from_positions`` for the k grid, normalization and
-    binning conventions, and to compute S(k) of a single configuration or
-    a per-group (incoherent) sum.
+    but evaluates every box-commensurate k in one NUFFT per frame.
+    This can be significantly faster than ``structure_factor`` for large systems.
 
     Parameters
     ----------
@@ -687,7 +683,8 @@ def structure_factor_nufft(
         Starting frame index for accumulating S(k). Negative numbers index
         from the end.
     stop : int, optional default = -1
-        Final frame index for accumulating S(k).
+        Final frame index for accumulating S(k). Negative numbers index
+        from the end.
     stride : int, default = 1
         The stride size when iterating through start:stop
     bins : int, optional default 100
@@ -708,9 +705,7 @@ def structure_factor_nufft(
     Returns
     -------
     tuple(k, S) : (numpy.ndarray, numpy.ndarray)
-        Bin centers and S(k) per bin. Each frame's bin means are combined
-        weighted by the number of k in each bin (this is the plain mean over
-        frames when the box is constant). Bins with no k are NaN.
+        Bin centers and S(k) per bin.
 
     Examples
     --------
@@ -726,8 +721,10 @@ def structure_factor_nufft(
     if isinstance(types, str):
         types = [types]
 
-    S_sum = np.zeros(bins)
-    n_sum = np.zeros(bins, dtype=np.int64)
+    S_sum = np.zeros(bins)  # Total scattering intensity S(k) for each k bin
+    # Keep track of how many wave vectors are used in total to get `S_sum`
+    # The num_k per frame depends on box size, which can change per frame.
+    k_count_total = np.zeros(bins, dtype=np.int64)
     with gsd.hoomd.open(gsdfile, mode="r") as trajectory:
         for frame in trajectory[start:stop:stride]:
             positions = frame.particles.position
@@ -739,7 +736,7 @@ def structure_factor_nufft(
                 positions = positions[np.isin(frame.particles.typeid, type_ids)]
             box = np.array(frame.configuration.box, dtype=np.float64)
             box[0:3] *= ref_length
-            k, S, n_k = structure_factor_from_positions(
+            k, S, num_k = structure_factor_from_positions(
                 positions=positions * ref_length,
                 box=box,
                 k_min=k_min,
@@ -748,14 +745,19 @@ def structure_factor_nufft(
                 eps=eps,
                 nthreads=nthreads,
             )
-            S_sum += np.nan_to_num(S) * n_k
-            n_sum += n_k
-    if not n_sum.any():
+            S_sum += np.nan_to_num(S) * num_k
+            k_count_total += num_k
+    if not k_count_total.any():
         raise ValueError(
-            f"No frames found in {gsdfile}[{start}:{stop}:{stride}]."
+            f"No wave vectors found between k_min={k_min} and k_max={k_max}. "
+            f"Check that {gsdfile}[{start}:{stop}:{stride}] contains frames "
+            "and that k_max is larger than the smallest |k| the box allows "
+            "(about 2*pi / longest box length)."
         )
+    # Final S(k) array, holds averaged S(k)
+    # Retains nan wherever k bins did not contain a k vector.
     S = np.full(bins, np.nan)
-    np.divide(S_sum, n_sum, out=S, where=n_sum > 0)
+    np.divide(S_sum, k_count_total, out=S, where=k_count_total > 0)
     return k, S
 
 
@@ -765,7 +767,6 @@ def structure_factor_from_positions(
     k_min,
     k_max,
     bins=100,
-    groups=None,
     eps=1e-9,
     nthreads=0,
 ):
@@ -782,16 +783,7 @@ def structure_factor_from_positions(
     Normalization: S(k) = |F(k)|^2 / N with F(k) = sum_j exp(i k.r_j), so an
     ideal gas has S = 1 and a perfect crystal has S = N at its Bragg peaks.
 
-    Binning: edges are ``np.linspace(k_min, k_max, bins + 1)`` and each bin is
-    half open, [lo, hi), compared in float64. S per bin is the mean over all
-    grid k in the bin (the full |k| shell, not one octant). On a regular grid
-    whole symmetry families of k can lie within round-off of an edge, so
-    results in such bins can differ from codes that bin in float32 (e.g.
-    freud).
-
-    With ``groups``, the incoherent sum over groups is returned instead:
-    S(k) = sum_l |F_l(k)|^2 / N, where F_l is the sum over the particles in
-    group l. This equals sum_l (N_l / N) S_l(k).
+    Binning: edges are ``np.linspace(k_min, k_max, bins + 1)``
 
     Parameters
     ----------
@@ -806,9 +798,6 @@ def structure_factor_from_positions(
         Maximum |k| included in the calculation (exclusive).
     bins : int, optional default 100
         Number of |k| bins between k_min and k_max.
-    groups : array-like, shape (N,), optional, default None
-        Group label of each particle. If given, the incoherent sum over
-        groups is returned (see Notes).
     eps : float, optional, default 1e-9
         finufft tolerance. Relative to the sum of the (unit) particle
         strengths, so the absolute error of F(k) scales with N.
@@ -817,7 +806,7 @@ def structure_factor_from_positions(
 
     Returns
     -------
-    tuple(k, S, n_k) : (numpy.ndarray, numpy.ndarray, numpy.ndarray)
+    tuple(k, S, num_k) : (numpy.ndarray, numpy.ndarray, numpy.ndarray)
         Bin centers, S(k) per bin, and the number of grid k in each bin
         (useful to merge or re-weight results). Bins with no k are NaN.
     """
@@ -829,10 +818,6 @@ def structure_factor_from_positions(
         raise ValueError("No particles given.")
     if not 0 <= k_min < k_max:
         raise ValueError("Requires 0 <= k_min < k_max.")
-    if groups is not None:
-        groups = np.asarray(groups)
-        if groups.shape != (N,):
-            raise ValueError("groups must have one label per particle.")
 
     box = np.asarray(box, dtype=np.float64)
     if box.shape == (3,):
@@ -851,7 +836,6 @@ def structure_factor_from_positions(
     frac = np.linalg.solve(H, positions.T)
     x = np.ascontiguousarray(2 * np.pi * ((frac + 0.5) % 1.0 - 0.5))
 
-    # n_a = a_a . k / 2pi, so |n_a| <= |a_a| k_max / 2pi covers the k_max shell.
     n_max = np.ceil(k_max * np.linalg.norm(H, axis=0) / (2 * np.pi))
     n_max = n_max.astype(int)
     n_axes = [np.arange(-m, m + 1) for m in n_max]
@@ -874,33 +858,24 @@ def structure_factor_from_positions(
     bin_idx = bin_idx[keep]
     del k_mag, in_range
 
-    def _power(xyz):
-        c = np.ones(xyz.shape[1], dtype=np.complex128)
-        F = finufft.nufft3d1(
-            xyz[0],
-            xyz[1],
-            xyz[2],
-            c,
-            tuple(2 * n_max + 1),
-            eps=eps,
-            isign=1,
-            nthreads=nthreads,
-        )
-        return np.abs(F.ravel()[keep]) ** 2
+    F = finufft.nufft3d1(
+        x[0],
+        x[1],
+        x[2],
+        np.ones(N, dtype=np.complex128),
+        tuple(2 * n_max + 1),
+        eps=eps,
+        isign=1,
+        nthreads=nthreads,
+    )
+    power = np.abs(F.ravel()[keep]) ** 2
 
-    if groups is None:
-        power = _power(x)
-    else:
-        power = np.zeros(len(keep))
-        for label in np.unique(groups):
-            power += _power(np.ascontiguousarray(x[:, groups == label]))
-
-    n_k = np.bincount(bin_idx, minlength=bins)
+    num_k = np.bincount(bin_idx, minlength=bins)
     S_sum = np.bincount(bin_idx, weights=power / N, minlength=bins)
     S = np.full(bins, np.nan)
-    np.divide(S_sum, n_k, out=S, where=n_k > 0)
+    np.divide(S_sum, num_k, out=S, where=num_k > 0)
     k = 0.5 * (edges[1:] + edges[:-1])
-    return k, S, n_k
+    return k, S, num_k
 
 
 def diffraction_pattern(

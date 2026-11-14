@@ -521,22 +521,6 @@ class TestStructureFactorNUFFT(BaseTest):
         )
         assert np.isclose(S[0], len(positions), rtol=1e-6)
 
-    def test_groups(self):
-        rng = np.random.default_rng(1)
-        box = np.array([3.1, 3.7, 4.3, 0.3, -0.2, 0.15])
-        positions = (_box_matrix(box) @ rng.uniform(-0.5, 0.5, (3, 60))).T
-        N = len(positions)
-        _, S, _ = structure_factor_from_positions(positions, box, 1.0, 8.0, 20)
-        _, S_one, _ = structure_factor_from_positions(
-            positions, box, 1.0, 8.0, 20, groups=["a"] * N
-        )
-        assert np.allclose(S, S_one, equal_nan=True)
-        # One particle per group: sum_l |F_l|^2 / N = 1 exactly.
-        _, S_each, _ = structure_factor_from_positions(
-            positions, box, 1.0, 8.0, 20, groups=np.arange(N)
-        )
-        assert np.allclose(S_each[~np.isnan(S_each)], 1)
-
     def test_empty_bins_nan(self):
         # Grid |k| in a 4^3 box are 2 pi sqrt(n) / 4 >= 1.57.
         _, S, n_k = structure_factor_from_positions(
@@ -557,10 +541,6 @@ class TestStructureFactorNUFFT(BaseTest):
             structure_factor_from_positions(np.zeros((5, 3)), [4, 4], 1, 5)
         with pytest.raises(ValueError):
             structure_factor_from_positions(np.zeros((5, 3)), [4, 4, 4], 5, 1)
-        with pytest.raises(ValueError):
-            structure_factor_from_positions(
-                np.zeros((5, 3)), [4, 4, 4], 1, 5, groups=[0, 1]
-            )
 
     def test_gsd(self, crystal_gsd):
         # Frames are rigid shifts of one crystal, so the average equals
